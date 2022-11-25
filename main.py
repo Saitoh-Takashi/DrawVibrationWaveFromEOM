@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 
 @dataclass
-class StaticParams:
+class StaticParameters:
     """運動方程式の不変パラメータ（m, k, c, ε）のクラス"""
     m: float  # 質量　[kg]
     k: float  # バネ定数 [N/m]
@@ -22,12 +22,12 @@ class StaticParams:
         return f'm={self.m:.2f}, k={self.k:.2f}, c={self.c:.2f}, ε={self.epsilon:.2f},\nωn={omega_n:.2f}, ζ={zeta:.2f}'
 
 
-def calc_displacement(time: np.array, static_params: StaticParams, mu: np.array, omega: np.array) -> np.array:
+def calc_displacement(time: np.array, static_params: StaticParameters, mu: np.array, omega: np.array) -> np.array:
     """変位の時間推移を算出する関数
 
     Args:
         time (np.array): 時間（横軸）の配列
-        static_params (StaticParams): 不変パラメータ（m, k, c, ε）
+        static_params (StaticParameters): 不変パラメータ（m, k, c, ε）
         mu (np.array): 偏心質量の時間推移
         omega (np.array): 外力の角振動数の時間推移
 
@@ -50,11 +50,6 @@ def calc_displacement(time: np.array, static_params: StaticParams, mu: np.array,
     return amplitude * np.cos(omega * time - theta)
 
 
-def calc_frequency_ratio(static_params: StaticParams, omega: np.array) -> np.array:
-    omega_n = np.sqrt(static_params.k / static_params.m)  # 定数
-    return omega / omega_n
-
-
 def calc_mu(time: np.array, amplitude: float, decrease_rate: float) -> np.array:
     """偏心質量の時間推移を計算する
     amplitudeで初期値を指定し、時間の推移にしたがって、decrease_rateで指定した割合まで減少する
@@ -70,12 +65,12 @@ def calc_mu(time: np.array, amplitude: float, decrease_rate: float) -> np.array:
     return amplitude - decrease_rate * amplitude * time / np.max(time)
 
 
-def calc_omega_decrease(time: np.array, static_params: StaticParams, amplification_factor: float) -> np.array:
+def calc_omega_decrease(time: np.array, static_params: StaticParameters, amplification_factor: float) -> np.array:
     """外力の角振動数が徐々に減少する場合の時間推移を算出する
 
     Args:
         time (np.array): 時間（横軸）の配列
-        static_params (StaticParams): 不変パラメータ（m, k, c, ε）
+        static_params (StaticParameters): 不変パラメータ（m, k, c, ε）
         amplification_factor: 外力の角振動数の最大値/ωnの値
 
     Returns:
@@ -85,12 +80,12 @@ def calc_omega_decrease(time: np.array, static_params: StaticParams, amplificati
     return amplification_factor * omega_n * (1 - time / np.max(time))
 
 
-def calc_omega_increase(time: np.array, static_params: StaticParams, amplification_factor: float) -> np.array:
+def calc_omega_increase(time: np.array, static_params: StaticParameters, amplification_factor: float) -> np.array:
     """外力の角振動数が徐々に増加する場合の時間推移を算出する
 
     Args:
         time (np.array): 時間（横軸）の配列
-        static_params (StaticParams): 不変パラメータ（m, k, c, ε）
+        static_params (StaticParameters): 不変パラメータ（m, k, c, ε）
         amplification_factor: 外力の角振動数の最大値/ωnの値
 
     Returns:
@@ -100,11 +95,25 @@ def calc_omega_increase(time: np.array, static_params: StaticParams, amplificati
     return amplification_factor * omega_n * time / np.max(time)
 
 
-def plot(static_params: StaticParams, time: np.array, x: np.array, mu: np.array, omega: np.array) -> None:
+def calc_omega_ratio(static_params: StaticParameters, omega: np.array) -> np.array:
+    """ω/ωnの時間推移の配列を算出
+    
+    Args:
+        static_params (StaticParameters): 不変パラメータ（m, k, c, ε）
+        omega (np.array): 外力の角振動数の時間推移の配列
+
+    Returns:
+        np.array: ω/ωnの時間推移の配列
+    """
+    omega_n = np.sqrt(static_params.k / static_params.m)
+    return omega / omega_n
+
+
+def plot(static_params: StaticParameters, time: np.array, x: np.array, mu: np.array, omega: np.array) -> None:
     """グラフをプロットする
 
     Args:
-        static_params (StaticParams): 不変パラメータ（m, k, c, ε）
+        static_params (StaticParameters): 不変パラメータ（m, k, c, ε）
         time (np.array): 横軸（時間）の配列
         x (np.array): 変位の配列
         mu (np.array): 偏心質量の時間推移の配列
@@ -123,7 +132,7 @@ def plot(static_params: StaticParams, time: np.array, x: np.array, mu: np.array,
     ax2.set_ylabel('ω [rad/s]')
 
     ax3 = ax2.twinx()
-    ax3.plot(time, calc_frequency_ratio(static_params=static_params, omega=omega), alpha=0)
+    ax3.plot(time, calc_omega_ratio(static_params=static_params, omega=omega), alpha=0)
     ax3.set_xlabel('Time [s]')
     ax3.set_ylabel('ω/ωn [-]')
 
@@ -144,7 +153,7 @@ def main():
     t = np.arange(0, n * dt, dt)
 
     # 不変パラメータ（m, k, c, ε）の設定
-    eom_params = StaticParams(m=0.5, k=1000, c=5, epsilon=0.1)
+    eom_params = StaticParameters(m=0.5, k=1000, c=5, epsilon=0.1)
     # 偏心質量の計算
     mu = calc_mu(time=t, amplitude=0.2, decrease_rate=0.5)
     # 外力の角振動数の計算
