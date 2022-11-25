@@ -12,9 +12,13 @@ class StaticParams:
     epsilon: float  # 偏心質量と質量の重心の距離 [m]
 
     def plot_title(self):
-        omega_n = np.sqrt(self.k / self.m)  # 定数
-        zeta = self.c / (2 * np.sqrt(self.m * self.k))  # 定数
+        """プロットのタイトルの文字列を返す
 
+        Returns:
+            str: グラフタイトルの文字列
+        """
+        omega_n = np.sqrt(self.k / self.m)
+        zeta = self.c / (2 * np.sqrt(self.m * self.k))
         return f'm={self.m:.2f}, k={self.k:.2f}, c={self.c:.2f}, ε={self.epsilon:.2f},\nωn={omega_n:.2f}, ζ={zeta:.2f}'
 
 
