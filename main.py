@@ -47,7 +47,7 @@ def calc_displacement(time: np.array, static_params: StaticParameters, mu: np.ar
     theta = np.arctan2(-2 * zeta * (omega / omega_n), 1 - (omega / omega_n) ** 2)
 
     # x=|a|e^j(ωt-θ)の実部を返す
-    return amplitude * np.cos(omega * time - theta)
+    return amplitude * np.cos(omega * time + theta)
 
 
 def calc_mu(time: np.array, amplitude: float, decrease_rate: float) -> np.array:
