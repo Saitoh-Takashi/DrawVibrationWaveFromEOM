@@ -1,12 +1,12 @@
-from dataclasses import dataclass
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+from dataclasses import dataclass
 
 
 @dataclass
 class StaticParameters:
     """運動方程式の不変パラメータ（m, k, c, ε）のクラス"""
-    m: float  # 質量　[kg]
+    m: float  # 質量 [kg]
     k: float  # バネ定数 [N/m]
     c: float  # 粘性係数 [Ns/m]
     epsilon: float  # 偏心質量と質量の重心の距離 [m]
@@ -121,28 +121,38 @@ def plot(static_params: StaticParameters, time: np.array, x: np.array, mu: np.ar
     """
     fig = plt.figure()
     fig.suptitle(static_params.plot_title())
+
+    # 変位
     ax1 = fig.add_subplot(3, 1, 1)
     ax1.plot(time, x)
     ax1.set_xlabel('Time [s]')
     ax1.set_ylabel('x [m]')
 
+    # ω 第一軸
     ax2 = fig.add_subplot(3, 1, 2)
-    ax2.plot(time, omega)
+    ax2.plot(time, omega, label='ω')
     ax2.set_xlabel('Time [s]')
     ax2.set_ylabel('ω [rad/s]')
 
+    # ω/ωn
     ax3 = ax2.twinx()
     ax3.plot(time, calc_omega_ratio(static_params=static_params, omega=omega), alpha=0)
+    ax3.plot(time, np.ones_like(time), label='ω=ωn')
     ax3.set_xlabel('Time [s]')
     ax3.set_ylabel('ω/ωn [-]')
 
+    # 凡例
+    h1, l1 = ax2.get_legend_handles_labels()
+    h2, l2 = ax3.get_legend_handles_labels()
+    ax3.legend(h1 + h2, l1 + l2, loc='upper left')
+
+    # 偏心質量
     ax4 = fig.add_subplot(3, 1, 3)
     ax4.plot(time, mu)
     ax4.set_xlabel('Time [s]')
     ax4.set_ylabel('mu [kg]')
 
     fig.tight_layout()
-
     plt.show()
 
 
@@ -157,7 +167,7 @@ def main():
     # 偏心質量の計算
     mu = calc_mu(time=t, amplitude=0.2, decrease_rate=0.5)
     # 外力の角振動数の計算
-    omega = calc_omega_increase(time=t, static_params=eom_params, amplification_factor=2)
+    omega = calc_omega_increase(time=t, static_params=eom_params, amplification_factor=5)
     # 変位の算出
     x = calc_displacement(time=t, static_params=eom_params, mu=mu, omega=omega)
 
