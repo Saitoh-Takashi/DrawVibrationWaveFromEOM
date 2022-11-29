@@ -17,9 +17,10 @@ class StaticParameters:
         Returns:
             str: グラフタイトルの文字列
         """
-        omega_n = np.sqrt(self.k / self.m)
+        omega_n = np.sqrt(self.k / self.m)  * 2 * np.pi
         zeta = self.c / (2 * np.sqrt(self.m * self.k))
-        return f'm={self.m:.2f}, k={self.k:.2f}, c={self.c:.2f}, ε={self.epsilon:.2f},\nωn={omega_n:.2f}, ζ={zeta:.2f}'
+
+        return f'm={self.m:.2f} [kg], k={self.k:.2f} [N/m], c={self.c:.2f}[N s/m], ε={self.epsilon:.2f} [m],\nωn={omega_n:.2f} [rad/s], ζ={zeta:.2f} [-]'
 
 
 def calc_displacement(time: np.array, static_params: StaticParameters, mu: np.array, omega: np.array) -> np.array:
@@ -35,8 +36,9 @@ def calc_displacement(time: np.array, static_params: StaticParameters, mu: np.ar
         np.array: 変位の時間推移の配列
     """
     # ωn、ζ、δstの計算
-    omega_n = np.sqrt(static_params.k / static_params.m)  # 定数
+    omega_n = np.sqrt(static_params.k / static_params.m) * 2 * np.pi  # 定数
     zeta = static_params.c / (2 * np.sqrt(static_params.m * static_params.k))  # 定数
+
     delta_st = ((mu * static_params.epsilon) / static_params.m) * ((omega / omega_n) ** 2)  # np.array
 
     # 振幅の計算
@@ -50,19 +52,19 @@ def calc_displacement(time: np.array, static_params: StaticParameters, mu: np.ar
     return amplitude * np.cos(omega * time + theta)
 
 
-def calc_mu(time: np.array, amplitude: float, decrease_rate: float) -> np.array:
+def calc_mu(time: np.array, initial_value: float, decrease_rate: float) -> np.array:
     """偏心質量の時間推移を計算する
     amplitudeで初期値を指定し、時間の推移にしたがって、decrease_rateで指定した割合まで減少する
 
     Args:
         time (np.array): 時間（横軸）の配列
-        amplitude (float): 偏心質量の初期値 [kg]
+        initial_value (float): 偏心質量の初期値 [kg]
         decrease_rate (float): 偏心質量が時間推移にしたがって減少する割合
 
     Returns:
         np.array: 偏心質量の時間推移の配列
     """
-    return amplitude - decrease_rate * amplitude * time / np.max(time)
+    return initial_value - decrease_rate * initial_value * time / np.max(time)
 
 
 def calc_omega_decrease(time: np.array, static_params: StaticParameters, amplification_factor: float) -> np.array:
@@ -76,7 +78,7 @@ def calc_omega_decrease(time: np.array, static_params: StaticParameters, amplifi
     Returns:
         np.array: 外力の角振動数が徐々に減少する場合の時間推移の配列
     """
-    omega_n = np.sqrt(static_params.k / static_params.m)
+    omega_n = np.sqrt(static_params.k / static_params.m) * 2 * np.pi  # [rad/s]
     return amplification_factor * omega_n * (1 - time / np.max(time))
 
 
@@ -91,7 +93,7 @@ def calc_omega_increase(time: np.array, static_params: StaticParameters, amplifi
     Returns:
         np.array: 外力の角振動数が徐々に増加する場合の時間推移の配列
     """
-    omega_n = np.sqrt(static_params.k / static_params.m)
+    omega_n = np.sqrt(static_params.k / static_params.m) * 2 * np.pi  # [rad/s]
     return amplification_factor * omega_n * time / np.max(time)
 
 
@@ -105,7 +107,7 @@ def calc_omega_ratio(static_params: StaticParameters, omega: np.array) -> np.arr
     Returns:
         np.array: ω/ωnの時間推移の配列
     """
-    omega_n = np.sqrt(static_params.k / static_params.m)
+    omega_n = np.sqrt(static_params.k / static_params.m)  * 2 * np.pi  # [rad/s]
     return omega / omega_n
 
 
@@ -163,11 +165,11 @@ def main():
     t = np.arange(0, n * dt, dt)
 
     # 不変パラメータ（m, k, c, ε）の設定
-    eom_params = StaticParameters(m=0.5, k=1000, c=5, epsilon=0.1)
-    # 偏心質量の計算
-    mu = calc_mu(time=t, amplitude=0.2, decrease_rate=0.5)
+    eom_params = StaticParameters(m=30, k=1080, c=55, epsilon=0.2)
     # 外力の角振動数の計算
-    omega = calc_omega_increase(time=t, static_params=eom_params, amplification_factor=5)
+    omega = calc_omega_decrease(time=t, static_params=eom_params, amplification_factor=2.22)
+    # 偏心質量の計算
+    mu = calc_mu(time=t, initial_value=6, decrease_rate=0)
     # 変位の算出
     x = calc_displacement(time=t, static_params=eom_params, mu=mu, omega=omega)
 
