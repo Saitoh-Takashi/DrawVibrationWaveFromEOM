@@ -1,179 +1,255 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from dataclasses import dataclass
+from typing import List, Tuple
 
 
 @dataclass
 class StaticParameters:
     """運動方程式の不変パラメータ（m, k, c, ε）のクラス"""
+    n: int  # データ点数
+    dt: float  # サンプリング周期 [ms]
     m: float  # 質量 [kg]
     k: float  # バネ定数 [N/m]
     c: float  # 粘性係数 [Ns/m]
     epsilon: float  # 偏心質量と質量の重心の距離 [m]
+    mu_initial: float  # 偏心質量の初期値 [kg]
+    mu_decrease_rate: float  # 偏心質量の減少率
+    max_omega_ratio: float  # ω/ωnの最大値 [-]
 
-    def plot_title(self):
-        """プロットのタイトルの文字列を返す
+
+@dataclass
+class PlotData:
+    """グラフ表示用の配列とラベルを保持するクラス"""
+    data: np.array  # 配列
+    label: str  # ラベル
+
+
+class CalculatePlotData:
+    """不変パラメータおよび時間軸を保持し，各種プロット用データを返すメソッドを保持するクラス
+
+    Attributes:
+        static_params (StaticParameters): 不変パラメータ
+        time (np.array): 時間（横軸）の配列
+        omega_n (float): ωnの値
+        zeta (float): ζの値
+    """
+    def __init__(self, static_params: StaticParameters) -> None:
+        """コンストラクタ
+
+        Args:
+            static_params (StaticParameters): 不変パラメータ
+        """
+        self.static_params = static_params
+        self.time = np.arange(0, self.static_params.n * self.static_params.dt, self.static_params.dt)
+        self.omega_n = np.sqrt(self.static_params.k / self.static_params.m) * 2 * np.pi  # [rad/s]
+        self.zeta = self.static_params.c / (2 * np.sqrt(self.static_params.m * self.static_params.k))
+
+    def displacement(self, mu: np.array, omega: np.array) -> PlotData:
+        """変位の時間推移を算出する関数
+
+        Args:
+            mu (np.array): 偏心質量の時間推移
+            omega (np.array): 外力の角振動数の時間推移
 
         Returns:
-            str: グラフタイトルの文字列
+            PlotData: 変位の時間推移の配列とラベル
         """
-        omega_n = np.sqrt(self.k / self.m)  * 2 * np.pi
-        zeta = self.c / (2 * np.sqrt(self.m * self.k))
+        # δstの計算
+        delta_st = ((mu * self.static_params.epsilon) / self.static_params.m) * (
+                (omega / self.omega_n) ** 2)  # np.array
 
-        return f'm={self.m:.2f} [kg], k={self.k:.2f} [N/m], c={self.c:.2f}[N s/m], ε={self.epsilon:.2f} [m],\nωn={omega_n:.2f} [rad/s], ζ={zeta:.2f} [-]'
+        # 振幅の計算
+        amplitude = delta_st / np.sqrt(
+            ((1 - ((omega / self.omega_n) ** 2)) ** 2) + ((2 * self.zeta * (omega / self.omega_n)) ** 2))  # np.array
+
+        # 位相の計算
+        theta = np.arctan2(-2 * self.zeta * (omega / self.omega_n), 1 - (omega / self.omega_n) ** 2)
+
+        # x=|a|e^j(ωt-θ)の実部を返す
+        return PlotData(data=amplitude * np.cos(omega * self.time + theta),
+                        label=f'c={self.static_params.c} [Ns/m], ζ={self.zeta:.2f} [-]')
+
+    def mu(self) -> PlotData:
+        """偏心質量の時間推移を計算する
+
+        Returns:
+            PlotData: 偏心質量の時間推移の配列とラベル
+        """
+
+        return PlotData(
+            data=self.static_params.mu_initial - self.static_params.mu_decrease_rate * self.static_params.mu_initial * self.time / np.max(
+                self.time), label=None)
+
+    def omega_decrease(self) -> PlotData:
+        """外力の角振動数が徐々に減少する場合の時間推移を算出する
+
+        Returns:
+            PlotData: 外力の角振動数が徐々に減少する場合の時間推移の配列とラベル
+        """
+        return PlotData(data=self.static_params.max_omega_ratio * self.omega_n * (1 - self.time / np.max(self.time)),
+                        label='ω')
+
+    def omega_increase(self) -> PlotData:
+        """外力の角振動数が徐々に増加する場合の時間推移を算出する
+
+        Returns:
+            PlotData: 外力の角振動数が徐々に増加する場合の時間推移の配列とラベル
+        """
+        return PlotData(data=self.static_params.max_omega_ratio * self.omega_n * self.time / np.max(self.time),
+                        label='ω')
+
+    def omega_ratio(self, omega: np.array) -> PlotData:
+        """ω/ωnの時間推移の配列を算出
+
+        Args:
+            omega (np.array): 外力の角振動数の時間推移の配列
+
+        Returns:
+            PlotData: ω/ωnの時間推移の配列とラベル
+        """
+        return PlotData(data=(omega / self.omega_n), label='ω/ωn')
+
+    def plot_title(self) -> str:
+        """グラフタイトルを返す
+
+        Returns:
+            str: グラフタイトル
+        """
+        return f'm={self.static_params.m:.2f} [kg], k={self.static_params.k:.2f} [N/m], ε={self.static_params.epsilon:.2f} [m], ωn={self.omega_n:.2f} [rad/s]'
 
 
-def calc_displacement(time: np.array, static_params: StaticParameters, mu: np.array, omega: np.array) -> np.array:
-    """変位の時間推移を算出する関数
+class Plot:
+    """グラフ用のFigureおよびプロットのメソッドを保持する
 
-    Args:
-        time (np.array): 時間（横軸）の配列
-        static_params (StaticParameters): 不変パラメータ（m, k, c, ε）
-        mu (np.array): 偏心質量の時間推移
-        omega (np.array): 外力の角振動数の時間推移
+    Attributes:
+        fig (plt.figure): グラフ用Figure
+        ax1 (plt.AxesSubplot): x用のサブプロット
+        ax2 (plt.AxesSubplot): x用のサブプロット
+        ax3 (plt.AxesSubplot): x用のサブプロット
+        ax4 (plt.AxesSubplot): x用のサブプロット
 
-    Returns:
-        np.array: 変位の時間推移の配列
     """
-    # ωn、ζ、δstの計算
-    omega_n = np.sqrt(static_params.k / static_params.m) * 2 * np.pi  # 定数
-    zeta = static_params.c / (2 * np.sqrt(static_params.m * static_params.k))  # 定数
 
-    delta_st = ((mu * static_params.epsilon) / static_params.m) * ((omega / omega_n) ** 2)  # np.array
+    def __init__(self, figsize: Tuple[float] =(8, 8)) -> None:
+        """コンストラクタ
 
-    # 振幅の計算
-    amplitude = delta_st / np.sqrt(
-        ((1 - ((omega / omega_n) ** 2)) ** 2) + ((2 * zeta * (omega / omega_n)) ** 2))  # np.array
+        Args:
+            figsize (Tuple[float]): グラフのサイズ
+        """
+        # Figureの作成
+        self.fig = plt.figure(figsize=figsize)
 
-    # 位相の計算
-    theta = np.arctan2(-2 * zeta * (omega / omega_n), 1 - (omega / omega_n) ** 2)
+        # x
+        self.ax1 = self.fig.add_subplot(3, 1, 1)
+        self.ax1.set_xlabel('Time [s]')
+        self.ax1.set_ylabel('x [m]')
 
-    # x=|a|e^j(ωt-θ)の実部を返す
-    return amplitude * np.cos(omega * time + theta)
+        # ω
+        self.ax2 = self.fig.add_subplot(3, 1, 2)
+        self.ax2.set_xlabel('Time [s]')
+        self.ax2.set_ylabel('ω [rad/s]')
 
+        # ω/ωn
+        self.ax3 = self.ax2.twinx()
+        self.ax3.set_xlabel('Time [s]')
+        self.ax3.set_ylabel('ω/ωn [-]')
 
-def calc_mu(time: np.array, initial_value: float, decrease_rate: float) -> np.array:
-    """偏心質量の時間推移を計算する
-    amplitudeで初期値を指定し、時間の推移にしたがって、decrease_rateで指定した割合まで減少する
+        # mu
+        self.ax4 = self.fig.add_subplot(3, 1, 3)
+        self.ax4.set_xlabel('Time [s]')
+        self.ax4.set_ylabel('mu [kg]')
 
-    Args:
-        time (np.array): 時間（横軸）の配列
-        initial_value (float): 偏心質量の初期値 [kg]
-        decrease_rate (float): 偏心質量が時間推移にしたがって減少する割合
+    def displacement(self, time: np.array, x: PlotData) -> None:
+        """変位の配列をプロット
 
-    Returns:
-        np.array: 偏心質量の時間推移の配列
-    """
-    return initial_value - decrease_rate * initial_value * time / np.max(time)
+        Args:
+            time (np.array): 時間（横軸）の配列
+            x (PlotData): 変位の配列とラベル
+        """
+        self.ax1.plot(time, x.data, label=x.label)
 
+    def omega(self, time: np.array, omega: PlotData, omega_ratio: PlotData) -> None:
+        """ωの時間推移の配列をプロット
 
-def calc_omega_decrease(time: np.array, static_params: StaticParameters, amplification_factor: float) -> np.array:
-    """外力の角振動数が徐々に減少する場合の時間推移を算出する
+        Args:
+            time (np.array): 時間（横軸）の配列
+            omega (PlotData): 外力の角振動数の時間推移の配列とラベル
+            omega_ratio (PlotData): ω/ωnの時間推移の配列とラベル
+        """
+        self.ax2.plot(time, omega.data, label=omega.label)
+        self.ax3.plot(time, omega_ratio.data, alpha=0)
+        self.ax3.plot(time, np.ones_like(time), label='ω=ωn')
 
-    Args:
-        time (np.array): 時間（横軸）の配列
-        static_params (StaticParameters): 不変パラメータ（m, k, c, ε）
-        amplification_factor: 外力の角振動数の最大値/ωnの値
+    def mu(self, time: np.array, mu: PlotData) -> None:
+        """muの時間推移の配列をプロット
 
-    Returns:
-        np.array: 外力の角振動数が徐々に減少する場合の時間推移の配列
-    """
-    omega_n = np.sqrt(static_params.k / static_params.m) * 2 * np.pi  # [rad/s]
-    return amplification_factor * omega_n * (1 - time / np.max(time))
+        Args:
+            time (np.array): 時間（横軸）の配列
+            mu (PlotData): 偏心質量の時間推移の配列
+        """
+        self.ax4.plot(time, mu.data)
 
+    def save(self, file_name: str) -> None:
+        """ω/ωnの時間推移の配列をプロット
 
-def calc_omega_increase(time: np.array, static_params: StaticParameters, amplification_factor: float) -> np.array:
-    """外力の角振動数が徐々に増加する場合の時間推移を算出する
+        Args:
+            file_name (str): 保存名
+        """
+        # 凡例
+        h1, l1 = self.ax2.get_legend_handles_labels()
+        h2, l2 = self.ax3.get_legend_handles_labels()
+        self.ax1.legend()
+        self.ax3.legend(h1 + h2, l1 + l2)
 
-    Args:
-        time (np.array): 時間（横軸）の配列
-        static_params (StaticParameters): 不変パラメータ（m, k, c, ε）
-        amplification_factor: 外力の角振動数の最大値/ωnの値
+        # レイアウトの調節
+        self.ax1.minorticks_on()
+        self.fig.tight_layout()
 
-    Returns:
-        np.array: 外力の角振動数が徐々に増加する場合の時間推移の配列
-    """
-    omega_n = np.sqrt(static_params.k / static_params.m) * 2 * np.pi  # [rad/s]
-    return amplification_factor * omega_n * time / np.max(time)
-
-
-def calc_omega_ratio(static_params: StaticParameters, omega: np.array) -> np.array:
-    """ω/ωnの時間推移の配列を算出
-    
-    Args:
-        static_params (StaticParameters): 不変パラメータ（m, k, c, ε）
-        omega (np.array): 外力の角振動数の時間推移の配列
-
-    Returns:
-        np.array: ω/ωnの時間推移の配列
-    """
-    omega_n = np.sqrt(static_params.k / static_params.m)  * 2 * np.pi  # [rad/s]
-    return omega / omega_n
-
-
-def plot(static_params: StaticParameters, time: np.array, x: np.array, mu: np.array, omega: np.array) -> None:
-    """グラフをプロットする
-
-    Args:
-        static_params (StaticParameters): 不変パラメータ（m, k, c, ε）
-        time (np.array): 横軸（時間）の配列
-        x (np.array): 変位の配列
-        mu (np.array): 偏心質量の時間推移の配列
-        omega (np.array): 外力の角振動数の時間推移の配列
-    """
-    fig = plt.figure()
-    fig.suptitle(static_params.plot_title())
-
-    # 変位
-    ax1 = fig.add_subplot(3, 1, 1)
-    ax1.plot(time, x)
-    ax1.set_xlabel('Time [s]')
-    ax1.set_ylabel('x [m]')
-
-    # ω 第一軸
-    ax2 = fig.add_subplot(3, 1, 2)
-    ax2.plot(time, omega, label='ω')
-    ax2.set_xlabel('Time [s]')
-    ax2.set_ylabel('ω [rad/s]')
-
-    # ω/ωn
-    ax3 = ax2.twinx()
-    ax3.plot(time, calc_omega_ratio(static_params=static_params, omega=omega), alpha=0)
-    ax3.plot(time, np.ones_like(time), label='ω=ωn')
-    ax3.set_xlabel('Time [s]')
-    ax3.set_ylabel('ω/ωn [-]')
-
-    # 凡例
-    h1, l1 = ax2.get_legend_handles_labels()
-    h2, l2 = ax3.get_legend_handles_labels()
-    ax3.legend(h1 + h2, l1 + l2, loc='upper left')
-
-    # 偏心質量
-    ax4 = fig.add_subplot(3, 1, 3)
-    ax4.plot(time, mu)
-    ax4.set_xlabel('Time [s]')
-    ax4.set_ylabel('mu [kg]')
-
-    fig.tight_layout()
-    plt.show()
+        # グラフの保存，表示
+        plt.savefig(f'{file_name}.svg')
+        plt.show()
 
 
 def main():
-    # 横軸（時間）の配列を作成
-    n = 10000  # データ点数 [-]
-    dt = 0.001  # サンプリング周期 [ms]
-    t = np.arange(0, n * dt, dt)
+    # 不変パラメータの設定
+    eom_params = [
+        StaticParameters(n=10000,
+                         dt=0.001,
+                         m=35,
+                         k=1080,
+                         c=c,
+                         epsilon=0.2,
+                         mu_initial=5,
+                         mu_decrease_rate=0,
+                         max_omega_ratio=2.22) for c in [30, 50, 100]]
 
-    # 不変パラメータ（m, k, c, ε）の設定
-    eom_params = StaticParameters(m=30, k=1080, c=55, epsilon=0.2)
-    # 外力の角振動数の計算
-    omega = calc_omega_decrease(time=t, static_params=eom_params, amplification_factor=2.22)
-    # 偏心質量の計算
-    mu = calc_mu(time=t, initial_value=6, decrease_rate=0)
-    # 変位の算出
-    x = calc_displacement(time=t, static_params=eom_params, mu=mu, omega=omega)
+    # グラフの用意
+    figure = Plot()
 
-    plot(static_params=eom_params, time=t, x=x, omega=omega, mu=mu)
+    # 不変パラメータごとに計算，描写
+    for index, static_params in enumerate(eom_params):
+        # プロット用クラスの呼び出し
+        plotdata_calculator = CalculatePlotData(static_params=static_params)
+
+        # 外力の角振動数の計算
+        omega = plotdata_calculator.omega_decrease()
+        omega_ratio = plotdata_calculator.omega_ratio(omega=omega.data)
+        # 偏心質量の計算
+        mu = plotdata_calculator.mu()
+        # 変位の算出
+        x = plotdata_calculator.displacement(mu=mu.data, omega=omega.data)
+
+        # 変位をプロット
+        figure.displacement(time=plotdata_calculator.time, x=x)
+        # ω，muをプロット
+        if index == 0:
+            figure.fig.suptitle(plotdata_calculator.plot_title())
+            figure.omega(time=plotdata_calculator.time, omega=omega, omega_ratio=omega_ratio)
+            figure.mu(time=plotdata_calculator.time, mu=mu)
+
+    # 保存
+    figure.save(file_name='Plot')
 
 
 if __name__ == '__main__':
